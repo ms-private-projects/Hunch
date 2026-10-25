@@ -397,6 +397,18 @@ export interface ProfileResource {
   user_uid: string;
   handle: string;
   display_name: string | null;
+  /** Whether the daily digest email is sent. */
+  email_digest: boolean;
+  /** An address overriding the Main Sequence account's; null means the account email. */
+  email_address: string | null;
   created_at: string | null;
   updated_at: string | null;
+}
+
+/** Any subset; an empty `email_address` clears the override. */
+export interface ProfileUpdateBody {
+  handle?: string;
+  display_name?: string;
+  email_digest?: boolean;
+  email_address?: string;
 }

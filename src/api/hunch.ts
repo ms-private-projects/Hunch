@@ -11,6 +11,7 @@ import type {
   LinkedAccountResource,
   NotificationsResponse,
   ProfileResource,
+  ProfileUpdateBody,
   ProjectConfiguration,
   ProposalResource,
   ReviewResource,
@@ -31,6 +32,8 @@ export const api = {
 
   profile: {
     get: (signal?: AbortSignal) => apiRequest<ProfileResource>({ path: "/v1/profile", signal }),
+    update: (body: ProfileUpdateBody) =>
+      apiRequest<ProfileResource>({ method: "PATCH", path: "/v1/profile", body }),
   },
 
   takes: {

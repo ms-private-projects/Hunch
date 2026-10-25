@@ -5,6 +5,7 @@ import { AssistantPage } from "../pages/assistant/AssistantPage";
 import { LeaderboardPage } from "../pages/leaderboard/LeaderboardPage";
 import { NotFoundPage } from "../pages/NotFoundPage";
 import { NotificationsPage } from "../pages/notifications/NotificationsPage";
+import { ProfilePage } from "../pages/profile/ProfilePage";
 import { ProposalsPage } from "../pages/proposals/ProposalsPage";
 import { NewTakePage } from "../pages/takes/NewTakePage";
 import { TakeDetailPage } from "../pages/takes/TakeDetailPage";
@@ -32,6 +33,7 @@ export default function App() {
                     <Route element={<TakeDetailPage />} path="/takes/:uid" />
                     <Route element={<LeaderboardPage />} path="/leaderboard" />
                     <Route element={<AccountsPage />} path="/accounts" />
+                    <Route element={<ProfilePage />} path="/profile" />
                     <Route element={<ProposalsPage />} path="/proposals" />
                     <Route element={<NotificationsPage />} path="/notifications" />
                     <Route element={<AssistantPage />} path="/assistant" />
