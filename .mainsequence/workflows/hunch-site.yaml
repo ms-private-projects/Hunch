@@ -1,0 +1,25 @@
+api_version: "3.0.0"
+name: hunch-site
+# The Hunch Command Center site. One unscoped file serves both Environments: the site names the
+# Hunch API release by repository and resource key, and the platform resolves it per Environment
+# at build time (development -> the development release, main -> the production release).
+resources:
+- key: hunch-site
+  kind: static_site
+  spec:
+    name: Hunch
+    framework: vite
+    output_directory: dist
+    routing_mode: spa
+    automatic_deployment: true
+    automatic_redeployment:
+      enabled: true
+      tag_regex: null
+    revision_retention_count: 3
+    build_environment:
+      # Read by src/api/transport.ts: the hosted build calls the Hunch API through the Command
+      # Center host's delegated transport with this release UID.
+      VITE_HUNCH_API_RELEASE_UID:
+        resource_release:
+          repository: HunchAPI
+          key: hunch
