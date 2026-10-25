@@ -36,6 +36,11 @@ A hosted build framed by Command Center reads `VITE_COMMAND_CENTER_ORIGIN` (set 
 and `VITE_HUNCH_API_RELEASE_UID` (the Hunch API release of that Environment) and calls the API
 through the host's delegated FastAPI transport.
 
+The platform resolves `VITE_HUNCH_API_RELEASE_UID` from `HunchAPI/hunch` when it builds the site,
+so push this repository's Environment branch only after that API release serves there. A build
+that runs first fails with `invalid_configuration`; the next push builds it again. The order and
+the MetaTables roles the API needs are in the hunchapi runbook, `docs/operations/hosted-deploy.md`.
+
 ## Layout
 
 - `src/app`: shell, routes, theme, startup gate, notices, the assistant engine.
