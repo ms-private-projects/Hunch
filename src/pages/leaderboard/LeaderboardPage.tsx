@@ -17,7 +17,7 @@ import type { LeaderboardEntry } from "../../api/types";
 import { useQuery } from "../../api/useQuery";
 import { useNotices } from "../../app/notices/NoticesProvider";
 import { ErrorNotice, LoadingNotice } from "../../components/Notices";
-import { formatDate, formatPercent, shortUid } from "../../lib/format";
+import { formatDate, formatNumber, formatPercent, shortUid } from "../../lib/format";
 
 const columns: ResourceColumnDefinition<LeaderboardEntry, ReactNode>[] = [
   { id: "rank", header: "#", importance: "secondary", renderCell: (entry) => String(entry.rank) },
@@ -43,6 +43,27 @@ const columns: ResourceColumnDefinition<LeaderboardEntry, ReactNode>[] = [
     ),
   },
   { id: "days", header: "Days active", importance: "tertiary", renderCell: (entry) => String(entry.days_active) },
+  {
+    id: "volatility",
+    header: "Volatility",
+    importance: "tertiary",
+    hideBelow: "lg",
+    renderCell: (entry) => formatPercent(entry.metrics?.annualised_volatility ?? null, { digits: 1 }),
+  },
+  {
+    id: "drawdown",
+    header: "Max drawdown",
+    importance: "tertiary",
+    hideBelow: "lg",
+    renderCell: (entry) => formatPercent(entry.metrics?.max_drawdown ?? null, { digits: 1 }),
+  },
+  {
+    id: "sharpe",
+    header: "Sharpe",
+    importance: "tertiary",
+    hideBelow: "lg",
+    renderCell: (entry) => formatNumber(entry.metrics?.sharpe_ratio ?? null, 2),
+  },
   {
     id: "kind",
     header: "Kind",

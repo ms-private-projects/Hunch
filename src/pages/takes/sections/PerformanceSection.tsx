@@ -3,11 +3,70 @@ import { useMemo } from "react";
 import { Badge } from "@dev-mainsequence/command-center-sdk/controls";
 
 import { api } from "../../../api/hunch";
+import type { PerformanceMetrics } from "../../../api/types";
 import { useQuery } from "../../../api/useQuery";
+import { StatRow, type StatItem } from "../../../components/KeyValueList";
 import { EmptyNotice, ErrorNotice, LoadingNotice } from "../../../components/Notices";
 import { PerformanceChart, parsePerformance } from "../../../components/PerformanceChart";
 import { SectionCard } from "../../../components/Page";
-import { formatDate, formatDateTime } from "../../../lib/format";
+import { formatDate, formatDateTime, formatNumber, formatPercent } from "../../../lib/format";
+
+const METRIC_KEYS: readonly (keyof PerformanceMetrics)[] = [
+  "sessions",
+  "total_return",
+  "annualised_return",
+  "annualised_volatility",
+  "sharpe_ratio",
+  "max_drawdown",
+  "best_day",
+  "worst_day",
+];
+
+function readMetrics(value: unknown): PerformanceMetrics | null {
+  if (typeof value !== "object" || value === null) return null;
+  const record = value as Record<string, unknown>;
+  const metrics = {} as Record<keyof PerformanceMetrics, number | null>;
+  for (const key of METRIC_KEYS) {
+    const entry = record[key];
+    metrics[key] = typeof entry === "number" && Number.isFinite(entry) ? entry : null;
+  }
+  return { ...metrics, sessions: metrics.sessions ?? 0 };
+}
+
+const AFTER_TWO = "after two sessions";
+
+function metricItems(metrics: PerformanceMetrics): StatItem[] {
+  const signedTone = (value: number | null): StatItem["tone"] => (value === null ? "default" : value >= 0 ? "positive" : "negative");
+  const pct = (key: string, label: string, value: number | null, signed = true): StatItem => ({
+    key,
+    label,
+    value: value === null ? "—" : formatPercent(value, { signed, digits: 2 }),
+    tone: signed ? signedTone(value) : "default",
+    meta: value === null ? AFTER_TWO : undefined,
+  });
+  return [
+    { key: "sessions", label: "Sessions", value: String(metrics.sessions) },
+    pct("total", "Total return", metrics.total_return),
+    pct("annualised", "Annualised return", metrics.annualised_return),
+    pct("volatility", "Annualised volatility", metrics.annualised_volatility, false),
+    {
+      key: "sharpe",
+      label: "Sharpe ratio",
+      value: metrics.sharpe_ratio === null ? "—" : formatNumber(metrics.sharpe_ratio, 2),
+      tone: signedTone(metrics.sharpe_ratio),
+      meta: metrics.sharpe_ratio === null ? AFTER_TWO : undefined,
+    },
+    {
+      key: "drawdown",
+      label: "Max drawdown",
+      value: metrics.max_drawdown === null ? "—" : formatPercent(metrics.max_drawdown, { digits: 2 }),
+      tone: metrics.max_drawdown === null || metrics.max_drawdown === 0 ? "default" : "negative",
+      meta: metrics.max_drawdown === null ? AFTER_TWO : undefined,
+    },
+    pct("best", "Best day", metrics.best_day),
+    pct("worst", "Worst day", metrics.worst_day),
+  ];
+}
 
 export function PerformanceSection({ uid, version }: { uid: string; version: number }) {
   const performance = useQuery((signal) => api.takes.performance(uid, signal), [uid, version]);
@@ -22,6 +81,7 @@ export function PerformanceSection({ uid, version }: { uid: string; version: num
   const context = frame.source?.context ?? {};
   const simulated = context.simulated !== false;
   const activatedAt = typeof context.activated_at === "string" ? context.activated_at : null;
+  const metrics = readMetrics(context.metrics);
   return (
     <SectionCard
       actions={
@@ -32,6 +92,7 @@ export function PerformanceSection({ uid, version }: { uid: string; version: num
       }
       title="Value since activation"
     >
+      {metrics ? <StatRow items={metricItems(metrics)} /> : null}
       {points.length === 0 ? (
         <EmptyNotice>
           {activatedAt

@@ -7,6 +7,7 @@ import { DataTable, ResourceStatusCell } from "@dev-mainsequence/command-center-
 import { api } from "../../../api/hunch";
 import type { RevisionResource } from "../../../api/types";
 import { useQuery } from "../../../api/useQuery";
+import { CitationBadges, EvidenceList, isEvidenceItem, linkCitations } from "../../../components/EvidenceList";
 import { Markdown } from "../../../components/Markdown";
 import { EmptyNotice, ErrorNotice, InfoNotice, LoadingNotice } from "../../../components/Notices";
 import { SectionCard } from "../../../components/Page";
@@ -33,6 +34,12 @@ const candidateColumns: ResourceColumnDefinition<Row, ReactNode>[] = [
     importance: "tertiary",
     renderCell: (row) => (Array.isArray(row.risks) && row.risks.length > 0 ? row.risks.map(String).join("; ") : "—"),
   },
+  {
+    id: "citations",
+    header: "Evidence",
+    importance: "secondary",
+    renderCell: (row) => <CitationBadges ids={Array.isArray(row.citations) ? row.citations.map(String) : undefined} />,
+  },
 ];
 
 const weightColumns: ResourceColumnDefinition<Row, ReactNode>[] = [
@@ -48,6 +55,9 @@ const rowId = (row: Row, index: number) => `${text(row.ticker) || text(row.figi)
 function RevisionCard({ revision, full }: { revision: RevisionResource; full: boolean }) {
   const candidates = revision.candidates.map((row, index) => ({ ...row, __id: rowId(row, index) }));
   const weights = revision.weights.map((row, index) => ({ ...row, __id: rowId(row, index) }));
+  const evidence = (revision.evidence ?? []).filter(isEvidenceItem);
+  const knownIds = new Set(evidence.map((item) => item.id));
+  const rationale = linkCitations(revision.rationale_md, knownIds, revision.uid);
   return (
     <SectionCard
       actions={
@@ -62,7 +72,13 @@ function RevisionCard({ revision, full }: { revision: RevisionResource; full: bo
       title={`Revision ${revision.revision}`}
     >
       <div className="hunch-stack">
-        {revision.rationale_md.trim() ? <Markdown>{revision.rationale_md}</Markdown> : <EmptyNotice>No rationale recorded.</EmptyNotice>}
+        {rationale.trim() ? <Markdown>{rationale}</Markdown> : <EmptyNotice>No rationale recorded.</EmptyNotice>}
+        {evidence.length > 0 ? (
+          <details className="hunch-details" open>
+            <summary>Evidence ({evidence.length})</summary>
+            <EvidenceList anchorScope={revision.uid} items={evidence} />
+          </details>
+        ) : null}
         {revision.guardrail_notes.length > 0 ? (
           <InfoNotice tone="warning">
             <strong>Guardrails:</strong> {revision.guardrail_notes.join(" ")}

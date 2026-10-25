@@ -460,6 +460,40 @@ a.hunch-list-item:focus-visible {
   font-weight: var(--font-weight-semibold);
 }
 
+/* Evidence ------------------------------------------------------------------------------- */
+
+.hunch-evidence {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hunch-evidence__item {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.5rem 0;
+  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  scroll-margin-top: 4rem;
+}
+
+.hunch-evidence__item:target {
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+  box-shadow: 0 0 0 0.375rem color-mix(in srgb, var(--primary) 8%, transparent);
+  border-radius: var(--radius-code);
+}
+
+.hunch-evidence__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem 0.5rem;
+}
+
+.hunch-evidence__title {
+  overflow-wrap: anywhere;
+}
+
 /* Page compositions ----------------------------------------------------------------------- */
 
 .hunch-master-detail {

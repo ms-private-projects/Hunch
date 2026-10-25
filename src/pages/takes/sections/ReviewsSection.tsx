@@ -4,6 +4,7 @@ import { Badge } from "@dev-mainsequence/command-center-sdk/controls";
 
 import { api } from "../../../api/hunch";
 import { useQuery } from "../../../api/useQuery";
+import { EvidenceList, isEvidenceItem } from "../../../components/EvidenceList";
 import { JsonBlock } from "../../../components/KeyValueList";
 import { Markdown } from "../../../components/Markdown";
 import { EmptyNotice, ErrorNotice, LoadingNotice } from "../../../components/Notices";
@@ -21,7 +22,10 @@ export function ReviewsSection({ uid, version, showProposalLinks }: { uid: strin
   }
   return (
     <div className="hunch-stack">
-      {items.map((review) => (
+      {items.map((review) => {
+        const checkEvidence = review.thesis_check?.evidence;
+        const news = Array.isArray(checkEvidence) ? checkEvidence.filter(isEvidenceItem).filter((item) => item.kind === "news") : [];
+        return (
         <SectionCard
           actions={
             <>
@@ -39,6 +43,12 @@ export function ReviewsSection({ uid, version, showProposalLinks }: { uid: strin
           <div className="hunch-stack">
             {review.verdict ? <p className="hunch-prose">{review.verdict}</p> : null}
             <Markdown>{review.summary_md}</Markdown>
+            {news.length > 0 ? (
+              <div>
+                <div className="hunch-stat__label">News considered ({news.length})</div>
+                <EvidenceList items={news} />
+              </div>
+            ) : null}
             {review.drift || review.thesis_check ? (
               <details className="hunch-details">
                 <summary>Drift and thesis check</summary>
@@ -60,7 +70,8 @@ export function ReviewsSection({ uid, version, showProposalLinks }: { uid: strin
             ) : null}
           </div>
         </SectionCard>
-      ))}
+        );
+      })}
     </div>
   );
 }

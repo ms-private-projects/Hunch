@@ -70,6 +70,44 @@ export interface TakeCreateBody {
   constraints: Partial<TakeConstraints>;
 }
 
+export type EvidenceKind = "quant" | "news" | "fundamental";
+
+/** One numbered evidence item a rationale, a candidate or a thesis check cites (`E1`, `E2`, …). */
+export interface EvidenceItem {
+  id: string;
+  figi: string;
+  ticker: string;
+  kind: EvidenceKind | string;
+  title: string;
+  summary: string;
+  source: string;
+  url: string | null;
+  published_at: string | null;
+}
+
+/** Fractions; everything but `sessions` and `total_return` is null until two sessions. */
+export interface PerformanceMetrics {
+  sessions: number;
+  total_return: number | null;
+  annualised_return: number | null;
+  annualised_volatility: number | null;
+  sharpe_ratio: number | null;
+  max_drawdown: number | null;
+  best_day: number | null;
+  worst_day: number | null;
+}
+
+export interface RevisionCandidate {
+  ticker?: string;
+  role?: string;
+  case?: string;
+  risks?: string[];
+  conviction?: number;
+  /** Evidence ids (`E3`) the research cited for this candidate. */
+  citations?: string[];
+  [key: string]: unknown;
+}
+
 export interface RevisionResource {
   uid: string;
   take_uid: string;
@@ -79,7 +117,8 @@ export interface RevisionResource {
   weights: Array<Record<string, unknown>>;
   cash_weight: number | null;
   guardrail_notes: string[];
-  candidates: Array<Record<string, unknown>>;
+  candidates: RevisionCandidate[];
+  evidence: EvidenceItem[];
   created_by: string;
   inference_request_uids: string[];
   signal_time_index: string | null;
@@ -286,6 +325,8 @@ export interface LeaderboardEntry {
   is_simulated: boolean;
   is_funded: boolean;
   origin_take_uid: string | null;
+  /** Null on a snapshot written before metrics existed, or before two sessions. */
+  metrics: PerformanceMetrics | null;
 }
 
 export interface LeaderboardResponse {
