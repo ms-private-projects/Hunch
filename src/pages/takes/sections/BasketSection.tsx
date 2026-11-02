@@ -28,13 +28,13 @@ export function BasketSection({ uid, version }: { uid: string; version: number }
   if (weights.loading) return <LoadingNotice label="Loading the basket…" />;
   if (weights.error) {
     if (isApiError(weights.error) && (weights.error.status === 404 || weights.error.status === 409)) {
-      return <EmptyNotice>No basket yet. Build the take to research the thesis and publish its weights.</EmptyNotice>;
+      return <EmptyNotice>No basket yet. Research the thesis, then build the take to publish its weights.</EmptyNotice>;
     }
     return <ErrorNotice error={weights.error} onRetry={weights.refetch} />;
   }
   const data = weights.data;
   if (!data || data.items.length === 0) {
-    return <EmptyNotice>No basket yet. Build the take to research the thesis and publish its weights.</EmptyNotice>;
+    return <EmptyNotice>No basket yet. Research the thesis, then build the take to publish its weights.</EmptyNotice>;
   }
   return (
     <div className="hunch-stack">

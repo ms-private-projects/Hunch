@@ -116,7 +116,7 @@ export function NewTakePage() {
     if (!body) return;
     const take = await action.run(() => api.takes.create(body));
     if (!take) return;
-    notify({ title: "Take saved", description: "Build it to turn the thesis into a basket.", variant: "success" });
+    notify({ title: "Take saved", description: "Research it, then build the basket from that research.", variant: "success" });
     navigate(`/takes/${encodeURIComponent(take.uid)}?welcome=1`);
   }
 
@@ -129,7 +129,7 @@ export function NewTakePage() {
               Save take
             </Button>
           }
-          description="Write the thesis in your own words and set the limits Hunch must respect. You can build, practise and fund it afterwards."
+          description="Write the thesis in your own words and set the limits Hunch must respect. You can research, build, practise and fund it afterwards."
           eyebrow="Takes"
           title="New take"
         />

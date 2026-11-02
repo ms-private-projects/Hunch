@@ -34,7 +34,10 @@ body {
   flex-direction: column;
 }
 
+/* The page grows to keep the footer at the bottom; the SDK page is a grid, so its rows start at
+   the top instead of sharing that height when the content is short. */
 .hunch-content > .cc-application-page {
+  align-content: start;
   flex: 1 1 auto;
   min-width: 0;
 }
