@@ -6,14 +6,30 @@ import { ResourcePicker } from "@dev-mainsequence/command-center-sdk/views";
 
 import { describeError } from "../../api/client";
 import { api } from "../../api/hunch";
-import type { FundResponse, TakeResource } from "../../api/types";
+import type { BuildResponse, FundResponse, ResearchResponse, TakeResource } from "../../api/types";
 import { useAction } from "../../api/useQuery";
 import { useNotices } from "../../app/notices/NoticesProvider";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { humanize } from "../../lib/format";
 import { FundTakeDialog } from "./FundTakeDialog";
 
+type Notify = ReturnType<typeof useNotices>["notify"];
+
+/** The notice for a build: the revision it wrote inline, or the Job it started when hosted. */
+export function notifyBuild(notify: Notify, response: BuildResponse) {
+  if (response.revision) {
+    notify({
+      title: `Built revision ${response.revision.revision}`,
+      description: `${response.revision.weights.length} positions${response.revision.guardrail_notes.length ? `, ${response.revision.guardrail_notes.length} guardrail note(s)` : ""}.`,
+      variant: "success",
+    });
+  } else if (response.job_run_uid) {
+    notify({ title: "Build started", description: `Job run ${response.job_run_uid}. Reload the take when it finishes.` });
+  }
+}
+
 type ActionId =
+  | "research"
   | "build"
   | "activate"
   | "publish"
@@ -32,6 +48,7 @@ interface ActionSpec {
 }
 
 const LABELS: Record<ActionId, string> = {
+  research: "Research",
   build: "Build",
   activate: "Activate practice",
   publish: "Publish",
@@ -44,37 +61,49 @@ const LABELS: Record<ActionId, string> = {
   archive: "Archive",
 };
 
-/** Which actions a take offers, owner first then everyone, by status. */
-export function availableActions(take: TakeResource, isOwner: boolean): { primary: ActionSpec | null; secondary: ActionSpec[]; more: ActionSpec[] } {
+/**
+ * Which actions a take offers, owner first then everyone, by status. A build constructs the basket
+ * from stored research, so a draft researches first; `hasResearch` is null while the list loads.
+ */
+export function availableActions(
+  take: TakeResource,
+  isOwner: boolean,
+  hasResearch: boolean | null,
+): { primary: ActionSpec | null; secondary: ActionSpec[]; more: ActionSpec[] } {
   const publishToggle: ActionSpec = take.visibility === "public" ? { id: "unpublish", label: LABELS.unpublish } : { id: "publish", label: LABELS.publish };
   const fork: ActionSpec = { id: "fork", label: LABELS.fork };
   const archive: ActionSpec = { id: "archive", label: LABELS.archive, tone: "danger" };
   const review: ActionSpec = { id: "review", label: LABELS.review };
   const refresh: ActionSpec = { id: "refresh", label: LABELS.refresh };
+  const researchAgain: ActionSpec = { id: "research", label: "Research again" };
+  const rebuild: ActionSpec = { id: "build", label: "Rebuild from latest research" };
   if (!isOwner) {
     return { primary: take.status === "archived" ? null : fork, secondary: [], more: [] };
   }
   switch (take.status) {
     case "draft":
-      return { primary: { id: "build", label: LABELS.build, tone: "primary" }, secondary: [], more: [archive] };
+      if (hasResearch === null) return { primary: null, secondary: [], more: [archive] };
+      return hasResearch
+        ? { primary: { id: "build", label: LABELS.build, tone: "primary" }, secondary: [researchAgain], more: [archive] }
+        : { primary: { id: "research", label: LABELS.research, tone: "primary" }, secondary: [], more: [archive] };
     case "built":
       return {
         primary: { id: "activate", label: LABELS.activate, tone: "primary" },
         secondary: [{ id: "fund", label: LABELS.fund }, publishToggle],
-        more: [{ id: "build", label: "Rebuild" }, review, refresh, fork, archive],
+        more: [researchAgain, rebuild, review, refresh, fork, archive],
       };
     case "active_practice":
       return {
         primary: { id: "fund", label: LABELS.fund, tone: "primary" },
         secondary: [publishToggle, review],
-        more: [{ id: "build", label: "Rebuild" }, refresh, fork, archive],
+        more: [researchAgain, rebuild, refresh, fork, archive],
       };
     case "funding":
     case "active_funded":
       return {
         primary: review,
         secondary: [{ id: "withdraw", label: LABELS.withdraw, tone: "warning" }, publishToggle],
-        more: [refresh, fork, archive],
+        more: [researchAgain, refresh, fork, archive],
       };
     case "archived":
       return { primary: fork, secondary: [], more: [] };
@@ -86,14 +115,18 @@ export function availableActions(take: TakeResource, isOwner: boolean): { primar
 export interface TakeActionsProps {
   take: TakeResource;
   isOwner: boolean;
+  /** Whether the take keeps any research; null while unknown. */
+  hasResearch: boolean | null;
   /** The take as an action returned it. */
   onTake: (take: TakeResource) => void;
   /** Sections that depend on the take's portfolio, funding or reviews should reload. */
   onSectionsChanged: () => void;
+  /** A research was recorded inline, or started as a platform Job. */
+  onResearch: (response: ResearchResponse) => void;
 }
 
 /** The header actions of a take, with their dialogs. */
-export function TakeActions({ take, isOwner, onTake, onSectionsChanged }: TakeActionsProps) {
+export function TakeActions({ take, isOwner, hasResearch, onTake, onSectionsChanged, onResearch }: TakeActionsProps) {
   const navigate = useNavigate();
   const { notify } = useNotices();
   const [pendingId, setPendingId] = useState<ActionId | null>(null);
@@ -117,19 +150,30 @@ export function TakeActions({ take, isOwner, onTake, onSectionsChanged }: TakeAc
   const run = useCallback(
     (id: ActionId) => {
       switch (id) {
+        case "research":
+          return perform(id, () => api.takes.research(take.uid), (response) => {
+            onTake(response.take);
+            onResearch(response);
+            if (response.research) {
+              notify({
+                title: `Research ${response.research.number} recorded`,
+                description: `${response.research.candidates.length} candidate(s). Build from it to construct the basket.`,
+                variant: "success",
+              });
+            } else {
+              notify({
+                title: "Research started",
+                description: response.job_run_uid
+                  ? `Job run ${response.job_run_uid}. The Research tab updates when it lands.`
+                  : "The Research tab updates when it lands.",
+              });
+            }
+          });
         case "build":
           return perform(id, () => api.takes.build(take.uid), (response) => {
             onTake(response.take);
             onSectionsChanged();
-            if (response.revision) {
-              notify({
-                title: `Built revision ${response.revision.revision}`,
-                description: `${response.revision.weights.length} positions${response.revision.guardrail_notes.length ? `, ${response.revision.guardrail_notes.length} guardrail note(s)` : ""}.`,
-                variant: "success",
-              });
-            } else if (response.job_run_uid) {
-              notify({ title: "Build started", description: `Job run ${response.job_run_uid}. Reload the take when it finishes.` });
-            }
+            notifyBuild(notify, response);
           });
         case "refresh":
           return perform(id, () => api.takes.refresh(take.uid), (response) => {
@@ -180,7 +224,7 @@ export function TakeActions({ take, isOwner, onTake, onSectionsChanged }: TakeAc
           return Promise.resolve();
       }
     },
-    [navigate, notify, onSectionsChanged, onTake, perform, take.uid],
+    [navigate, notify, onResearch, onSectionsChanged, onTake, perform, take.uid],
   );
 
   const closeDialog = () => {
@@ -188,7 +232,7 @@ export function TakeActions({ take, isOwner, onTake, onSectionsChanged }: TakeAc
     dialogAction.clearError();
   };
 
-  const actions = availableActions(take, isOwner);
+  const actions = availableActions(take, isOwner, hasResearch);
   const button = (spec: ActionSpec, variant: "primary" | "outline" | "danger" = "outline") => (
     <Button
       key={spec.id}

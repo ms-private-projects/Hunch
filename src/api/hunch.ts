@@ -14,11 +14,14 @@ import type {
   ProfileUpdateBody,
   ProjectConfiguration,
   ProposalResource,
+  ResearchResource,
+  ResearchResponse,
   ReviewResource,
   RevisionResource,
   TabularFrame,
   TakeCreateBody,
   TakeResource,
+  ThesisCritiqueResource,
   WeightsResponse,
 } from "./types";
 
@@ -43,11 +46,22 @@ export const api = {
       apiRequest<TakeResource>({ path: takePath(uid), signal }),
     create: (body: TakeCreateBody) =>
       apiRequest<TakeResource>({ method: "POST", path: "/v1/takes", body }),
-    build: (uid: string, researchMode?: "inference" | "heuristic") =>
+    research: (uid: string) =>
+      apiRequest<ResearchResponse>({ method: "POST", path: `${takePath(uid)}/actions/research`, body: {} }),
+    researchList: (uid: string, signal?: AbortSignal) =>
+      apiRequest<ResearchResource[]>({ path: `${takePath(uid)}/research`, query: { limit: 30 }, signal }),
+    /** Portfolio construction from a stored research: the latest one unless `researchUid` names one. */
+    build: (uid: string, researchUid?: string) =>
       apiRequest<BuildResponse>({
         method: "POST",
         path: `${takePath(uid)}/actions/build`,
-        body: researchMode ? { research_mode: researchMode } : {},
+        body: researchUid ? { research_uid: researchUid } : {},
+      }),
+    critique: (uid: string) =>
+      apiRequest<ThesisCritiqueResource>({
+        method: "POST",
+        path: `${takePath(uid)}/actions/critique-thesis`,
+        body: {},
       }),
     refresh: (uid: string) =>
       apiRequest<BuildResponse>({ method: "POST", path: `${takePath(uid)}/actions/refresh`, body: {} }),

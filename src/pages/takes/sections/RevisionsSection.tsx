@@ -2,45 +2,17 @@ import type { ReactNode } from "react";
 
 import { Badge } from "@dev-mainsequence/command-center-sdk/controls";
 import type { ResourceColumnDefinition } from "@dev-mainsequence/command-center-sdk/resource";
-import { DataTable, ResourceStatusCell } from "@dev-mainsequence/command-center-sdk/views";
+import { DataTable } from "@dev-mainsequence/command-center-sdk/views";
 
 import { api } from "../../../api/hunch";
 import type { RevisionResource } from "../../../api/types";
 import { useQuery } from "../../../api/useQuery";
-import { CitationBadges, EvidenceList, isEvidenceItem, linkCitations } from "../../../components/EvidenceList";
+import { EvidenceList, isEvidenceItem, linkCitations } from "../../../components/EvidenceList";
 import { Markdown } from "../../../components/Markdown";
 import { EmptyNotice, ErrorNotice, InfoNotice, LoadingNotice } from "../../../components/Notices";
 import { SectionCard } from "../../../components/Page";
 import { formatDateTime, formatPercent, humanize } from "../../../lib/format";
-
-type Row = Record<string, unknown>;
-
-const text = (value: unknown): string => (typeof value === "string" ? value : value === null || value === undefined ? "" : String(value));
-const number = (value: unknown): number | null => (typeof value === "number" && Number.isFinite(value) ? value : null);
-
-const candidateColumns: ResourceColumnDefinition<Row, ReactNode>[] = [
-  { id: "ticker", header: "Ticker", importance: "primary", renderCell: (row) => text(row.ticker) || "—" },
-  {
-    id: "role",
-    header: "Role",
-    importance: "secondary",
-    renderCell: (row) => <ResourceStatusCell label={humanize(text(row.role) || "—")} tone={text(row.role) === "hedge" || text(row.role) === "defensive" ? "info" : "primary"} />,
-  },
-  { id: "conviction", header: "Conviction", importance: "secondary", renderCell: (row) => formatPercent(number(row.conviction), { digits: 0 }) },
-  { id: "case", header: "Case", importance: "tertiary", renderCell: (row) => text(row.case) || "—" },
-  {
-    id: "risks",
-    header: "Risks",
-    importance: "tertiary",
-    renderCell: (row) => (Array.isArray(row.risks) && row.risks.length > 0 ? row.risks.map(String).join("; ") : "—"),
-  },
-  {
-    id: "citations",
-    header: "Evidence",
-    importance: "secondary",
-    renderCell: (row) => <CitationBadges ids={Array.isArray(row.citations) ? row.citations.map(String) : undefined} />,
-  },
-];
+import { candidateColumns, number, rowId, text, type Row } from "./candidates";
 
 const weightColumns: ResourceColumnDefinition<Row, ReactNode>[] = [
   { id: "ticker", header: "Ticker", importance: "primary", renderCell: (row) => text(row.ticker) || text(row.figi) || "—" },
@@ -49,8 +21,6 @@ const weightColumns: ResourceColumnDefinition<Row, ReactNode>[] = [
   { id: "role", header: "Role", importance: "secondary", renderCell: (row) => humanize(text(row.role) || "—") },
   { id: "reason", header: "Reason", importance: "tertiary", renderCell: (row) => text(row.reason) || "—" },
 ];
-
-const rowId = (row: Row, index: number) => `${text(row.ticker) || text(row.figi) || "row"}-${index}`;
 
 function RevisionCard({ revision, full }: { revision: RevisionResource; full: boolean }) {
   const candidates = revision.candidates.map((row, index) => ({ ...row, __id: rowId(row, index) }));

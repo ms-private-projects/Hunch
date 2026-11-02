@@ -5,8 +5,10 @@ import type { TakeResource } from "../../../api/types";
 import { KeyValueList } from "../../../components/KeyValueList";
 import { SectionCard } from "../../../components/Page";
 import { formatPercent, humanize } from "../../../lib/format";
+import { ThesisCritiqueCard } from "./ThesisCritiqueCard";
 
-export function OverviewSection({ take }: { take: TakeResource }) {
+/** `canCritique`: the API critiques an owned take or a published one. */
+export function OverviewSection({ take, canCritique }: { take: TakeResource; canCritique: boolean }) {
   const constraints = take.constraints;
   const triggers = (constraints.change_my_mind ?? "")
     .split(/\n+/)
@@ -60,6 +62,7 @@ export function OverviewSection({ take }: { take: TakeResource }) {
           )}
         </SectionCard>
       </ApplicationCardGrid>
+      {canCritique ? <ThesisCritiqueCard key={take.uid} uid={take.uid} /> : null}
     </div>
   );
 }

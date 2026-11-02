@@ -112,6 +112,8 @@ export interface RevisionResource {
   uid: string;
   take_uid: string;
   revision: number;
+  /** The research this basket was constructed from; null on revisions older than research. */
+  research_uid?: string | null;
   kind: string;
   rationale_md: string;
   weights: Array<Record<string, unknown>>;
@@ -130,6 +132,64 @@ export interface BuildResponse {
   take: TakeResource;
   revision: RevisionResource | null;
   job_run_uid: string | null;
+}
+
+/** One research of a take's target universe: candidates and their case, no weights. */
+export interface ResearchResource {
+  uid: string;
+  take_uid: string;
+  /** 1, 2, ... per take, in research order. */
+  number: number;
+  mode: string;
+  /** The thesis parsed: claims, beneficiaries, losers, keywords, horizon. */
+  brief: Record<string, unknown>;
+  candidates: RevisionCandidate[];
+  rationale_md: string;
+  evidence: EvidenceItem[];
+  provider: string | null;
+  model: string | null;
+  inference_request_uids: string[];
+  conversation_uid: string | null;
+  created_by: string;
+  created_at: string | null;
+}
+
+/** Hosted, research runs as a platform Job: `research` stays null and `job_run_uid` is set. */
+export interface ResearchResponse {
+  execution: "inline" | "job";
+  take: TakeResource;
+  research: ResearchResource | null;
+  job_run_uid: string | null;
+}
+
+export interface ThesisClaim {
+  claim: string;
+  /** `strong`, `moderate` or `weak`. */
+  strength: string;
+  note: string;
+}
+
+/** What a take claims, what it assumes, what would show it wrong; never a change to it. */
+export interface ThesisCritiqueResource {
+  take_uid: string;
+  /** `inference` (the analysis model) or `heuristic`. */
+  mode: string;
+  summary: string;
+  /** `clear`, `partly_clear` or `vague`. */
+  clarity: string;
+  claims: ThesisClaim[];
+  assumptions: string[];
+  counterarguments: string[];
+  risks: string[];
+  /** Checkable conditions that would show the thesis wrong. */
+  suggested_conditions: string[];
+  constraint_notes: string[];
+  questions: string[];
+  provider: string | null;
+  model: string | null;
+  inference_request_uids: string[];
+  conversation_uid: string | null;
+  disclaimers: string[];
 }
 
 export interface WeightItem {
