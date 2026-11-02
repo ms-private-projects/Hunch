@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { ChatLauncher } from "@dev-mainsequence/command-center-ai";
@@ -24,15 +24,26 @@ import { ResearchSection, sortResearch } from "./sections/ResearchSection";
 import { ReviewsSection } from "./sections/ReviewsSection";
 import { RevisionsSection } from "./sections/RevisionsSection";
 import { TakeProposalsSection } from "./sections/TakeProposalsSection";
-import { notifyBuild, TakeActions } from "./TakeActions";
+import { notifyBuild, notifyBuilt, TakeActions } from "./TakeActions";
 import { TakeSummary } from "./TakeSummary";
 
-/** A hosted research is a platform Job; its list is polled at this interval until it lands. */
-const RESEARCH_POLL_MS = 20_000;
-/** Stop polling after this long; a research Job on development takes about five minutes. */
-const RESEARCH_PENDING_LIMIT_MS = 30 * 60_000;
+/** A hosted research or build is a platform Job; the page polls at this interval until it lands. */
+const JOB_POLL_MS = 20_000;
+/** Stop polling after this long; on development a research Job takes about five minutes, a build ten. */
+const JOB_PENDING_LIMIT_MS = 30 * 60_000;
 
 const isDraft = (take: TakeResource) => take.status === "draft";
+
+/** Calls `expire` once a pending Job has been waited on for the limit. */
+function usePendingLimit(pending: boolean, expire: () => void) {
+  const expireRef = useRef(expire);
+  expireRef.current = expire;
+  useEffect(() => {
+    if (!pending) return;
+    const timer = window.setTimeout(() => expireRef.current(), JOB_PENDING_LIMIT_MS);
+    return () => window.clearTimeout(timer);
+  }, [pending]);
+}
 
 const SHARED_TABS: ResourceDetailTabDefinition<TakeResource>[] = [
   { id: "overview", label: "Overview" },
@@ -66,7 +77,7 @@ export function TakeDetailPage() {
   const [researchPendingAfter, setResearchPendingAfter] = useState<number | null>(null);
   const research = useQuery((signal) => api.takes.researchList(uid, signal), [uid, version], {
     enabled: Boolean(take.data),
-    pollIntervalMs: researchPendingAfter !== null ? RESEARCH_POLL_MS : undefined,
+    pollIntervalMs: researchPendingAfter !== null ? JOB_POLL_MS : undefined,
   });
   const latestResearch = useMemo(() => sortResearch(research.data)[0] ?? null, [research.data]);
   // An API that cannot list research (older, or failing) still gets the Build action.
@@ -82,14 +93,37 @@ export function TakeDetailPage() {
     });
   }, [latestResearch, notify, researchPendingAfter]);
 
+  usePendingLimit(researchPendingAfter !== null, () => {
+    setResearchPendingAfter(null);
+    notify({ title: "Research has not landed yet", description: "Check its Job run, or use Research again.", variant: "info" });
+  });
+
+  // While a hosted build Job runs, `buildPendingSince` holds the take's `updated_at` at its start: the
+  // build writes its revision after that, then marks the take built.
+  const [buildPendingSince, setBuildPendingSince] = useState<string | null>(null);
+  const revisions = useQuery((signal) => api.takes.revisions(uid, signal), [uid], {
+    enabled: buildPendingSince !== null,
+    pollIntervalMs: JOB_POLL_MS,
+  });
+  const builtRevision = useMemo(() => {
+    if (buildPendingSince === null || !revisions.data) return null;
+    const since = Date.parse(buildPendingSince);
+    return revisions.data.find((item) => item.created_at !== null && Date.parse(item.created_at) > since) ?? null;
+  }, [buildPendingSince, revisions.data]);
+  const refetchTake = take.refetch;
+
   useEffect(() => {
-    if (researchPendingAfter === null) return;
-    const timer = window.setTimeout(() => {
-      setResearchPendingAfter(null);
-      notify({ title: "Research has not landed yet", description: "Check its Job run, or use Research again.", variant: "info" });
-    }, RESEARCH_PENDING_LIMIT_MS);
-    return () => window.clearTimeout(timer);
-  }, [notify, researchPendingAfter]);
+    if (!builtRevision) return;
+    setBuildPendingSince(null);
+    refetchTake();
+    bumpVersion();
+    notifyBuilt(notify, builtRevision);
+  }, [builtRevision, bumpVersion, notify, refetchTake]);
+
+  usePendingLimit(buildPendingSince !== null, () => {
+    setBuildPendingSince(null);
+    notify({ title: "The build has not landed yet", description: "Check its Job run, or reload the take.", variant: "info" });
+  });
 
   const tabDefinitions = isOwner ? OWNER_TABS : SHARED_TABS;
   const { tabs, activeTab } = useMemo(
@@ -124,6 +158,9 @@ export function TakeDetailPage() {
   const onBuilt = useCallback(
     (response: BuildResponse) => {
       setTake(response.take);
+      if (!response.revision) {
+        setBuildPendingSince(response.take.updated_at ?? response.take.created_at ?? new Date().toISOString());
+      }
       bumpVersion();
       notifyBuild(notify, response);
     },
@@ -133,6 +170,7 @@ export function TakeDetailPage() {
   const data = take.data;
   const welcome = params.get("welcome") === "1";
   const researchPending = researchPendingAfter !== null;
+  const buildPending = buildPendingSince !== null;
 
   return (
     <ApplicationPage maxWidth="wide">
@@ -140,7 +178,9 @@ export function TakeDetailPage() {
         {data && isOwner && data.status === "draft" ? (
           <InfoNotice>
             {welcome ? "Your take is saved as a private draft. " : "This take is a draft. "}
-            {researchPending ? (
+            {buildPending ? (
+              <>Its build is running; the basket appears when it lands, usually within ten minutes.</>
+            ) : researchPending ? (
               <>
                 Its research is running; <strong>Build</strong> appears when it lands.
               </>
@@ -167,8 +207,10 @@ export function TakeDetailPage() {
             data ? (
               <div className="hunch-actions">
                 <TakeActions
+                  building={buildPending}
                   hasResearch={researchPending && !hasResearch ? null : hasResearch}
                   isOwner={isOwner}
+                  onBuilt={onBuilt}
                   onResearch={onResearch}
                   onSectionsChanged={bumpVersion}
                   onTake={setTake}
@@ -189,7 +231,7 @@ export function TakeDetailPage() {
             <OverviewSection canCritique={isOwner || data.visibility === "public"} take={data} />
           ) : null}
           {data && activeTab?.id === "research" ? (
-            <ResearchSection canBuild={isOwner} onBuilt={onBuilt} pending={researchPending} research={research} uid={uid} />
+            <ResearchSection canBuild={isOwner && !buildPending} onBuilt={onBuilt} pending={researchPending} research={research} uid={uid} />
           ) : null}
           {data && activeTab?.id === "basket" ? <BasketSection uid={uid} version={version} /> : null}
           {data && activeTab?.id === "performance" ? <PerformanceSection uid={uid} version={version} /> : null}

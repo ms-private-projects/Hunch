@@ -6,7 +6,7 @@ import { ResourcePicker } from "@dev-mainsequence/command-center-sdk/views";
 
 import { describeError } from "../../api/client";
 import { api } from "../../api/hunch";
-import type { BuildResponse, FundResponse, ResearchResponse, TakeResource } from "../../api/types";
+import type { BuildResponse, FundResponse, ResearchResponse, RevisionResource, TakeResource } from "../../api/types";
 import { useAction } from "../../api/useQuery";
 import { useNotices } from "../../app/notices/NoticesProvider";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
@@ -15,16 +15,21 @@ import { FundTakeDialog } from "./FundTakeDialog";
 
 type Notify = ReturnType<typeof useNotices>["notify"];
 
+/** The notice for a revision a build wrote. */
+export function notifyBuilt(notify: Notify, revision: RevisionResource) {
+  notify({
+    title: `Built revision ${revision.revision}`,
+    description: `${revision.weights.length} positions${revision.guardrail_notes.length ? `, ${revision.guardrail_notes.length} guardrail note(s)` : ""}.`,
+    variant: "success",
+  });
+}
+
 /** The notice for a build: the revision it wrote inline, or the Job it started when hosted. */
 export function notifyBuild(notify: Notify, response: BuildResponse) {
   if (response.revision) {
-    notify({
-      title: `Built revision ${response.revision.revision}`,
-      description: `${response.revision.weights.length} positions${response.revision.guardrail_notes.length ? `, ${response.revision.guardrail_notes.length} guardrail note(s)` : ""}.`,
-      variant: "success",
-    });
+    notifyBuilt(notify, response.revision);
   } else if (response.job_run_uid) {
-    notify({ title: "Build started", description: `Job run ${response.job_run_uid}. Reload the take when it finishes.` });
+    notify({ title: "Build started", description: `Job run ${response.job_run_uid}. The take updates when it lands.` });
   }
 }
 
@@ -61,15 +66,29 @@ const LABELS: Record<ActionId, string> = {
   archive: "Archive",
 };
 
+interface Actions {
+  primary: ActionSpec | null;
+  secondary: ActionSpec[];
+  more: ActionSpec[];
+}
+
 /**
  * Which actions a take offers, owner first then everyone, by status. A build constructs the basket
  * from stored research, so a draft researches first; `hasResearch` is null while the list loads.
+ * While a hosted build runs (`building`), no second build is offered.
  */
-export function availableActions(
-  take: TakeResource,
-  isOwner: boolean,
-  hasResearch: boolean | null,
-): { primary: ActionSpec | null; secondary: ActionSpec[]; more: ActionSpec[] } {
+export function availableActions(take: TakeResource, isOwner: boolean, hasResearch: boolean | null, building = false): Actions {
+  const actions = actionsByStatus(take, isOwner, hasResearch);
+  if (!building) return actions;
+  const notBuild = (spec: ActionSpec) => spec.id !== "build";
+  return {
+    primary: actions.primary && notBuild(actions.primary) ? actions.primary : null,
+    secondary: actions.secondary.filter(notBuild),
+    more: actions.more.filter(notBuild),
+  };
+}
+
+function actionsByStatus(take: TakeResource, isOwner: boolean, hasResearch: boolean | null): Actions {
   const publishToggle: ActionSpec = take.visibility === "public" ? { id: "unpublish", label: LABELS.unpublish } : { id: "publish", label: LABELS.publish };
   const fork: ActionSpec = { id: "fork", label: LABELS.fork };
   const archive: ActionSpec = { id: "archive", label: LABELS.archive, tone: "danger" };
@@ -117,16 +136,20 @@ export interface TakeActionsProps {
   isOwner: boolean;
   /** Whether the take keeps any research; null while unknown. */
   hasResearch: boolean | null;
+  /** A hosted build Job is running; the build actions wait for it. */
+  building: boolean;
   /** The take as an action returned it. */
   onTake: (take: TakeResource) => void;
   /** Sections that depend on the take's portfolio, funding or reviews should reload. */
   onSectionsChanged: () => void;
   /** A research was recorded inline, or started as a platform Job. */
   onResearch: (response: ResearchResponse) => void;
+  /** A build wrote its revision inline, or started as a platform Job. */
+  onBuilt: (response: BuildResponse) => void;
 }
 
 /** The header actions of a take, with their dialogs. */
-export function TakeActions({ take, isOwner, hasResearch, onTake, onSectionsChanged, onResearch }: TakeActionsProps) {
+export function TakeActions({ take, isOwner, hasResearch, building, onTake, onSectionsChanged, onResearch, onBuilt }: TakeActionsProps) {
   const navigate = useNavigate();
   const { notify } = useNotices();
   const [pendingId, setPendingId] = useState<ActionId | null>(null);
@@ -170,11 +193,7 @@ export function TakeActions({ take, isOwner, hasResearch, onTake, onSectionsChan
             }
           });
         case "build":
-          return perform(id, () => api.takes.build(take.uid), (response) => {
-            onTake(response.take);
-            onSectionsChanged();
-            notifyBuild(notify, response);
-          });
+          return perform(id, () => api.takes.build(take.uid), onBuilt);
         case "refresh":
           return perform(id, () => api.takes.refresh(take.uid), (response) => {
             onTake(response.take);
@@ -224,7 +243,7 @@ export function TakeActions({ take, isOwner, hasResearch, onTake, onSectionsChan
           return Promise.resolve();
       }
     },
-    [navigate, notify, onResearch, onSectionsChanged, onTake, perform, take.uid],
+    [navigate, notify, onBuilt, onResearch, onSectionsChanged, onTake, perform, take.uid],
   );
 
   const closeDialog = () => {
@@ -232,7 +251,7 @@ export function TakeActions({ take, isOwner, hasResearch, onTake, onSectionsChan
     dialogAction.clearError();
   };
 
-  const actions = availableActions(take, isOwner, hasResearch);
+  const actions = availableActions(take, isOwner, hasResearch, building);
   const button = (spec: ActionSpec, variant: "primary" | "outline" | "danger" = "outline") => (
     <Button
       key={spec.id}
