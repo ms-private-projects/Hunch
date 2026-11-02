@@ -430,7 +430,10 @@ export interface ResearchConfiguration {
   build_execution: string;
   bars_provider: string;
   inference_provider: string | null;
+  /** The shared default; a role may run on another model (`models`). */
   inference_model: string | null;
+  /** The model each role runs on in `inference` mode, by role (`research`, `review`, `analysis`). */
+  models?: Record<string, { provider: string; model: string; thinking: string | null }>;
 }
 
 export interface ConnectorsConfiguration {
