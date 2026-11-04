@@ -74,6 +74,12 @@ body {
   padding-inline-start: 1.1rem;
 }
 
+/* The SDK opens a picker's options in a popup on <body> at z-index 100, under a dialog's backdrop
+   (120): a picker inside a dialog (the linked account when funding a take) could not be used. */
+body > .cc-resource-picker__popup {
+  z-index: 130;
+}
+
 /* Notices and feedback -------------------------------------------------------------------- */
 
 .hunch-notices {
